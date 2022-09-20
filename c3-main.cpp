@@ -41,10 +41,8 @@ std::chrono::time_point<std::chrono::system_clock> currentTime;
 vector<ControlState> cs;
 
 bool refresh_view = false;
-void keyboardEventOccurred(const pcl::visualization::KeyboardEvent &event, void* viewer)
+void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event, void* viewer)
 {
-
-      //boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer = *static_cast<boost::shared_ptr<pcl::visualization::PCLVisualizer> *>(viewer_void);
     if (event.getKeySym() == "Right" && event.keyDown()) {
         cs.push_back(ControlState(0, -0.02, 0));
     }
@@ -57,6 +55,13 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent &event, void*
     else if (event.getKeySym() == "Down" && event.keyDown()) {
         cs.push_back(ControlState(-0.1, 0, 0));
     }
+    // @note: Had trouble getting the key strokes to register consistently.
+    //        So, I added this capability to automatically speed up to 3 ticks.
+    else if (event.getKeySym() == "w" && event.keyDown()) {
+        cs.push_back(ControlState(0.3, 0, 0));
+        std::cout << "Speeding up by 3 ticks!" << std::endl;
+    }
+
     if (event.getKeySym() == "a" && event.keyDown()) {
         refresh_view = true;
     }
@@ -97,8 +102,66 @@ void drawCar(Pose pose, int num, Color color, double alpha, pcl::visualization::
     renderBox(viewer, box, num, color, alpha);
 }
 
-int main()
+// Reference: Udacity ICP Alignment module, https://pcl.readthedocs.io ICP section
+// NOTE: ICP = Iterative Closest Point
+Eigen::Matrix4d ICP(PointCloudT::Ptr target, PointCloudT::Ptr source, Pose startingPose, int iterations) {
+    // Align the source with the starting pose
+    Eigen::Matrix4d initTransform = transform3D(startingPose.rotation.yaw,
+                                                startingPose.rotation.pitch,
+                                                startingPose.rotation.roll,
+                                                startingPose.position.x,
+                                                startingPose.position.y,
+                                                startingPose.position.z);
+    PointCloudT::Ptr transformSource(new PointCloudT);
+    pcl::transformPointCloud(*source, *transformSource, initTransform);
+
+    // Create ICP object
+    pcl::IterativeClosestPoint<PointT, PointT> icp;
+    icp.setMaximumIterations(iterations);
+    icp.setInputSource(transformSource);
+    icp.setInputTarget(target);
+    icp.setMaxCorrespondenceDistance(2);
+
+    PointCloudT::Ptr cloud_icp(new PointCloudT); // Output ICP point cloud
+    icp.align(*cloud_icp);
+
+    // If ICP didn't converge, warn the user
+    if (!icp.hasConverged()) {
+        std::cout << "WARNING: ICP did not converge!!" << std::endl;
+        return Eigen::Matrix4d::Identity();
+    }
+
+    // If it did converge, return the transformation matrix
+    return (icp.getFinalTransformation().cast<double>() * initTransform);
+}
+
+int main(int argc, char** argv)
 {
+    bool isIcp = true;
+    // @note: Reference material used filterRes = 0.5, iterations = 3
+    //        But I found that this didn't result is < 1.2m pose error
+    double filterRes = 1.0;
+    int iterations = 10;
+
+    // @todo: Maybe improve CLI experience in the future.
+    if (argc == 4) {
+        if (strcmp("ndt", argv[1]) == 0) {
+            isIcp = false;
+            std::cout << "ndt was set!" << std::endl;
+        }
+        else if (strcmp("icp", argv[1]) != 0) {
+            std::cout << "Invalid argument: " << argv[1] << ". Defaulting to icp." << std::endl;
+        }
+
+        filterRes = atof(argv[2]);
+        iterations = atoi(argv[3]);
+    } // else, use the defaults
+    else {
+        std::cout << "Defaults for this program will be used!" << std::endl;
+    }
+
+    std::cout << "Using ICP? " << isIcp << " , filterRes: " << filterRes << " , iterations: " << iterations << std::endl;
+
     auto client = cc::Client("localhost", 2000);
     client.SetTimeout(2s);
     auto world = client.GetWorld();
@@ -140,8 +203,8 @@ int main()
     cout << "Loaded " << mapCloud->points.size() << " data points from map.pcd" << endl;
     renderPointCloud(viewer, mapCloud, "map", Color(0,0,1));
 
-    typename pcl::PointCloud<PointT>::Ptr cloudFiltered (new pcl::PointCloud<PointT>);
-    typename pcl::PointCloud<PointT>::Ptr scanCloud (new pcl::PointCloud<PointT>);
+    typename pcl::PointCloud<PointT>::Ptr cloudFiltered(new pcl::PointCloud<PointT>);
+    typename pcl::PointCloud<PointT>::Ptr scanCloud(new pcl::PointCloud<PointT>);
 
     lidar->Listen([&new_scan, &lastScanTime, &scanCloud](auto data){
         if(new_scan){
@@ -195,16 +258,35 @@ int main()
 
         if (!new_scan) {
             new_scan = true;
-            // TODO: (Filter scan using voxel filter)
+            // Filter scan using voxel filter (Reference: Udacity ICP Alignment section)
+            pcl::VoxelGrid<PointT> vf;
+            vf.setInputCloud(scanCloud);
+            vf.setLeafSize(filterRes, filterRes, filterRes);
+            vf.filter(*cloudFiltered);
 
-            // TODO: Find pose transform by using ICP or NDT matching
-            //pose = ....
+            // Find pose transform by using ICP or NDT matching
+            Eigen::Matrix4d transform = transform3D(pose.rotation.yaw,
+                                                    pose.rotation.pitch,
+                                                    pose.rotation.roll,
+                                                    pose.position.x,
+                                                    pose.position.y,
+                                                    pose.position.z);
+            if (isIcp) {
+                transform = ICP(mapCloud, cloudFiltered, pose, iterations);
+            }
+            else {
+                // @todo: Add NDT implementation
+            }
 
-            // TODO: Transform scan so it aligns with ego's actual pose and render that scan
+            pose = getPose(transform);
+
+            // Transform scan so it aligns with ego's actual pose and render that scan
+            PointCloudT::Ptr transformedScan(new PointCloudT);
+            pcl::transformPointCloud(*cloudFiltered, *transformedScan, transform);
 
             viewer->removePointCloud("scan");
-            // TODO: Change `scanCloud` below to your transformed scan
-            renderPointCloud(viewer, scanCloud, "scan", Color(1,0,0) );
+            // @note: replaced scanCloud for actual transformed scan
+            renderPointCloud(viewer, transformedScan, "scan", Color(1,0,0));
 
             viewer->removeAllShapes();
             drawCar(pose, 1,  Color(0,1,0), 0.35, viewer);
@@ -215,6 +297,7 @@ int main()
             }
 
             double distDriven = sqrt( (truePose.position.x) * (truePose.position.x) + (truePose.position.y) * (truePose.position.y) );
+
             viewer->removeShape("maxE");
             viewer->addText("Max Error: "+to_string(maxError)+" m", 200, 100, 32, 1.0, 1.0, 1.0, "maxE",0);
             viewer->removeShape("derror");
