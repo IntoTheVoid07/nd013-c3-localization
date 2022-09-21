@@ -299,6 +299,12 @@ int main(int argc, char** argv)
             vf.setInputCloud(scanCloud);
             vf.setLeafSize(filterRes, filterRes, filterRes);
             vf.filter(*cloudFiltered);
+            pose = Pose(Point(vehicle->GetTransform().location.x,
+                              vehicle->GetTransform().location.y,
+                              vehicle->GetTransform().location.z),
+                              Rotate(vehicle->GetTransform().rotation.yaw * pi/180,
+                                     vehicle->GetTransform().rotation.pitch * pi/180,
+                                     vehicle->GetTransform().rotation.roll * pi/180)) - poseRef;
 
             // Find pose transform by using ICP or NDT matching
             Eigen::Matrix4d transform = transform3D(pose.rotation.yaw,
@@ -334,6 +340,8 @@ int main(int argc, char** argv)
 
             double distDriven = sqrt( (truePose.position.x) * (truePose.position.x) + (truePose.position.y) * (truePose.position.y) );
 
+            viewer->removeShape("currentSpeed");
+            viewer->addText("Current speed: "+to_string(control.throttle), 200, 25, 32, 1.0, 1.0, 1.0, "currentSpeed",0);
             viewer->removeShape("maxE");
             viewer->addText("Max Error: "+to_string(maxError)+" m", 200, 100, 32, 1.0, 1.0, 1.0, "maxE",0);
             viewer->removeShape("derror");
@@ -344,10 +352,10 @@ int main(int argc, char** argv)
             if (maxError > 1.2 || distDriven >= 170.0 ) {
                 viewer->removeShape("eval");
                 if (maxError > 1.2) {
-                    viewer->addText("Try Again", 200, 50, 32, 1.0, 0.0, 0.0, "eval", 0);
+                    viewer->addText("Try Again", 200, 0, 32, 1.0, 0.0, 0.0, "eval", 0);
                 }
                 else {
-                    viewer->addText("Passed!", 200, 50, 32, 0.0, 1.0, 0.0, "eval", 0);
+                    viewer->addText("Passed!", 200, 0, 32, 0.0, 1.0, 0.0, "eval", 0);
                 }
             }
 

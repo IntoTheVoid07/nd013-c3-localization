@@ -7,7 +7,7 @@ To achieve this, we were also tasked with implementing [Iterative Closet Point (
 
 I'm sure there's a way to build and run locally if you have a Ubuntu Xenial VM. However, getting everything setup for the Udacity projects has been a moot point and a lot of the libraries, etc. seem outdated. So, I opted to just use the provided workspace environment.
 
-NOTE: In this repo, the c3-project.tar.gz contains the entire project workspace contents. For sake of convenience, I also put a few of the files contained it, at the root level. However, the only file I changed from the provided start code is c3-main.cpp.
+NOTE: In this repo, the c3-project.tar.gz contains the entire project workspace contents. For sake of convenience, I also put a few of the files contained it, at the root level. However, the only file I changed from the provided start code is c3-main.cpp. The file at the root directory should be copied in with the tarball as I made additional changes after making the tarball.
 
 TIP: I had trouble building the source without enabling the GPU capability. So, make sure the GPU is enabled.
 
