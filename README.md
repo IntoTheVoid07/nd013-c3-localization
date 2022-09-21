@@ -3,10 +3,13 @@ The third Udacity Self-Driving Car Nanodegree Project was centered around using 
 
 To achieve this, we were also tasked with implementing [Iterative Closet Point (ICP)](https://en.wikipedia.org/wiki/Iterative_closest_point) and/ or [Normal Distributions Transforms (NDT)](https://en.wikipedia.org/wiki/Normal_distributions_transform). I opted to implement both.
 
-NOTE: I'm sure there's a way to build and run locally if you have a Ubuntu Xenial VM. However, getting everything setup for the Udacity projects has been a moot point and a lot of the libraries, etc. seem outdated. So, I opted to just use the provided workspace environment.
-
 ## Building the source
-NOTE: I had trouble building the source without enabling the GPU capability. So, make sure the GPU is enabled.
+
+I'm sure there's a way to build and run locally if you have a Ubuntu Xenial VM. However, getting everything setup for the Udacity projects has been a moot point and a lot of the libraries, etc. seem outdated. So, I opted to just use the provided workspace environment.
+
+NOTE: In this repo, the c3-project.tar.gz contains the entire project workspace contents. For sake of convenience, I also put a few of the files contained it, at the root level. However, the only file I changed from the provided start code is c3-main.cpp.
+
+TIP: I had trouble building the source without enabling the GPU capability. So, make sure the GPU is enabled.
 
 From the Udacity workspace desktop, in the one terminal:
 
