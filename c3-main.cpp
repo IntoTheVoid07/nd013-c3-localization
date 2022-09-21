@@ -103,15 +103,16 @@ void drawCar(Pose pose, int num, Color color, double alpha, pcl::visualization::
 }
 
 // Reference: Udacity ICP Alignment module, https://pcl.readthedocs.io ICP section
-// NOTE: ICP = Iterative Closest Point
-Eigen::Matrix4d ICP(PointCloudT::Ptr target, PointCloudT::Ptr source, Pose startingPose, int iterations) {
+// NOTE: ICP = Iterative Closest Point, sp = starting pose
+Eigen::Matrix4d ICP(PointCloudT::Ptr target, PointCloudT::Ptr source, Pose sp, int iterations)
+{
     // Align the source with the starting pose
-    Eigen::Matrix4d initTransform = transform3D(startingPose.rotation.yaw,
-                                                startingPose.rotation.pitch,
-                                                startingPose.rotation.roll,
-                                                startingPose.position.x,
-                                                startingPose.position.y,
-                                                startingPose.position.z);
+    Eigen::Matrix4d initTransform = transform3D(sp.rotation.yaw,
+                                                sp.rotation.pitch,
+                                                sp.rotation.roll,
+                                                sp.position.x,
+                                                sp.position.y,
+                                                sp.position.z);
     PointCloudT::Ptr transformSource(new PointCloudT);
     pcl::transformPointCloud(*source, *transformSource, initTransform);
 
@@ -122,8 +123,8 @@ Eigen::Matrix4d ICP(PointCloudT::Ptr target, PointCloudT::Ptr source, Pose start
     icp.setInputTarget(target);
     icp.setMaxCorrespondenceDistance(2);
 
-    PointCloudT::Ptr cloud_icp(new PointCloudT); // Output ICP point cloud
-    icp.align(*cloud_icp);
+    PointCloudT::Ptr cloudIcp(new PointCloudT); // Output ICP point cloud
+    icp.align(*cloudIcp);
 
     // If ICP didn't converge, warn the user
     if (!icp.hasConverged()) {
@@ -133,6 +134,33 @@ Eigen::Matrix4d ICP(PointCloudT::Ptr target, PointCloudT::Ptr source, Pose start
 
     // If it did converge, return the transformation matrix
     return (icp.getFinalTransformation().cast<double>() * initTransform);
+}
+
+// Reference: Udacity NDT Alignment module
+// NOTE: NDT = Normal Distributions Transform, sp = starting pose
+Eigen::Matrix4d NDT(pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt,
+                    PointCloudT::Ptr src, Pose sp, int iterations)
+{
+    Eigen::Matrix4f initTransform = transform3D(sp.rotation.yaw,
+                                                sp.rotation.pitch,
+                                                sp.rotation.roll,
+                                                sp.position.x,
+                                                sp.position.y,
+                                                sp.position.z).cast<float>();
+    ndt.setMaximumIterations(iterations);
+    ndt.setInputSource(src);
+
+    // Output NDT point cloud
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloudNdt(new pcl::PointCloud<pcl::PointXYZ>);
+    ndt.align(*cloudNdt, initTransform);
+
+    // If the NDT didn't converge, warn the user
+    if (!ndt.hasConverged()) {
+        std::cout << "WARNING: NDT did not converage!!" << std::endl;
+        return Eigen::Matrix4d::Identity();
+    }
+
+    return ndt.getFinalTransformation().cast<double>();
 }
 
 int main(int argc, char** argv)
@@ -225,6 +253,14 @@ int main(int argc, char** argv)
     Pose poseRef(Point(vehicle->GetTransform().location.x, vehicle->GetTransform().location.y, vehicle->GetTransform().location.z), Rotate(vehicle->GetTransform().rotation.yaw * pi/180, vehicle->GetTransform().rotation.pitch * pi/180, vehicle->GetTransform().rotation.roll * pi/180));
     double maxError = 0;
 
+    // Setup ndt with the non-changing setups
+    // Reference: Udacity NDT alignment section
+    pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt;
+    ndt.setTransformationEpsilon(0.0001);
+    ndt.setStepSize(1);
+    ndt.setResolution(1);
+    ndt.setInputTarget(mapCloud);
+
     while (!viewer->wasStopped()) {
         while(new_scan) {
             std::this_thread::sleep_for(0.1s);
@@ -275,7 +311,7 @@ int main(int argc, char** argv)
                 transform = ICP(mapCloud, cloudFiltered, pose, iterations);
             }
             else {
-                // @todo: Add NDT implementation
+                transform = NDT(ndt, cloudFiltered, pose, iterations);
             }
 
             pose = getPose(transform);
